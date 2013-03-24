@@ -10,6 +10,7 @@ using Android.Graphics;
 using Android.Provider;
 using Android.Util;
 using Java.IO;
+using Java.Lang;
 
 namespace KarmaMaker.PicasaIntegration
 {
@@ -17,15 +18,19 @@ namespace KarmaMaker.PicasaIntegration
 	public class MainActivity : Activity
 	{
 		private const int PickImageRequestCode = 0x0100;
+		private const string Tag = "MainActivity";
 
+		private System.Text.StringBuilder LogCache { get; set; }
 		private MainView MainView { get; set; }
 		private File ImageTempFile { get; set; }
 
 		protected override void OnCreate(Bundle bundle)
 		{
 			base.OnCreate(bundle);
+			LogCache = new System.Text.StringBuilder();
 			MainView = new MainView(this);
 			MainView.LoadFromGallery += OnLoadFromGallery;
+			MainView.SendLogViaEmail += OnSendLogViaEmail;
 
 			SetContentView(MainView);
 		}
@@ -48,12 +53,12 @@ namespace KarmaMaker.PicasaIntegration
 			if(requestCode == PickImageRequestCode && resultCode == Result.Ok && data != null)
 			{
 				Android.Net.Uri selectedImgUri = data.Data;
-
-				RunOnUiThread(() => Toast.MakeText(this, string.Format("SelectedImageUri == {0}", selectedImgUri), ToastLength.Long).Show());
+				AddToLog("SelectedImageUri == {0}", selectedImgUri);
 
 				if(IsImageFromPicasa(selectedImgUri))
 				{
-					RunOnUiThread(() => Toast.MakeText(this, string.Format("Load from Picasa", selectedImgUri), ToastLength.Long).Show());
+					AddToLog("Load from Picasa");
+
 					using(var inputStream = ContentResolver.OpenInputStream(selectedImgUri))
 					{
 						MainView.SetImageBitmap(BitmapFactory.DecodeStream(inputStream));
@@ -61,19 +66,48 @@ namespace KarmaMaker.PicasaIntegration
 				}
 				else
 				{
-					RunOnUiThread(() => Toast.MakeText(this, string.Format("Load from local storage", selectedImgUri), ToastLength.Long).Show());
-					String[] filePathColumn = { MediaStore.MediaColumns.Data };
+					AddToLog("Load from local storage");
+
+					string[] filePathColumn = { MediaStore.MediaColumns.Data };
 					var cursor = ContentResolver.Query (selectedImgUri, filePathColumn, null, null, null);
+					if (cursor == null) AddToLog ("Panic: cursor is null");
+
 					cursor.MoveToFirst();
 					int columnIndex = cursor.GetColumnIndex(MediaStore.MediaColumns.Data);
-					String picturePath = cursor.GetString(columnIndex);
+					if (columnIndex != 0) AddToLog("ColumnIndex == {0}", columnIndex);
+
+					string picturePath = cursor.GetString(columnIndex);
 					cursor.Close();
+					AddToLog("PicturePath == {0}", picturePath);
+
 					MainView.SetImageBitmap(BitmapFactory.DecodeFile(picturePath));
 				}
+				AddToLog("Memory usage: {0}MB from {1}MB", Runtime.GetRuntime().TotalMemory() / (1024 * 1024), Runtime.GetRuntime().MaxMemory() / (1024 * 1024));
+			
 			}
 			else
 			{
-				RunOnUiThread(() => Toast.MakeText(this, string.Format("RequestCode == {0} | ResultCode == {1} | Data == {2}", requestCode, resultCode, data), ToastLength.Long).Show());
+				AddToLog("RequestCode == {0} | ResultCode == {1} | Data == {2}", requestCode, resultCode, data);
+
+			}
+		}
+
+		private void OnSendLogViaEmail ()
+		{
+			var sendEmail = new Intent(Intent.ActionSendto);
+			sendEmail.SetType("text");
+			sendEmail.PutExtra(Intent.ExtraSubject, "Log");
+			sendEmail.SetData(Android.Net.Uri.Parse("mailto: vivalatecnocracia@gmail.com"));
+			sendEmail.PutExtra(Intent.ExtraText, LogCache.ToString());
+
+			if(0 < PackageManager.QueryIntentActivities(sendEmail, 0).Count) 
+			{
+				StartActivity(sendEmail);
+				LogCache.Clear();
+			}
+			else
+			{
+				AddToLog("Your mail client has not been setup properly");
 			}
 		}
 
@@ -82,11 +116,21 @@ namespace KarmaMaker.PicasaIntegration
 			// This is quite stupid, I know.
 			return imageUri.ToString().Contains("//com.google.android.gallery3d.provider/picasa/item/");
 		}
+
+		private void AddToLog(string msg, params object[] args)
+		{
+			msg = string.Format(msg, args);
+			LogCache.Append(msg); // Yeap it can be huge
+			RunOnUiThread(() => Toast.MakeText(this, msg, ToastLength.Short).Show());
+			Log.Info(Tag, msg);
+		}
 	}
-	
+
 	class MainView : LinearLayout
 	{
 		public event Action LoadFromGallery;
+		public event Action SendLogViaEmail;
+
 		Bitmap ImageBitmap;
 		private ImageView ImageView{ get; set; }
 
@@ -111,6 +155,14 @@ namespace KarmaMaker.PicasaIntegration
 				loadFromGalleryBtn.Click += (sender, e) => LoadFromGallery.Invoke();
 			}
 			AddView(loadFromGalleryBtn);
+
+			var sendLogViaEmailBtn = new Button(context);
+			{
+				sendLogViaEmailBtn.LayoutParameters = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WrapContent, LinearLayout.LayoutParams.WrapContent, 0);
+				sendLogViaEmailBtn.Text = "Send log via email";
+				sendLogViaEmailBtn.Click += (sender, e) => SendLogViaEmail.Invoke();
+			}
+			AddView(sendLogViaEmailBtn);
 		}
 
 		public void SetImageBitmap(Bitmap imageBitmap)
@@ -120,6 +172,7 @@ namespace KarmaMaker.PicasaIntegration
 				ImageBitmap.Recycle();
 			}
 			ImageView.SetImageBitmap(ImageBitmap = imageBitmap); 
+
 		}
 	}
 }
