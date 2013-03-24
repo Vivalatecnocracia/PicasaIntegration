@@ -80,12 +80,6 @@ namespace KarmaMaker.PicasaIntegration
 				Log.AddMsg("Your mail client has not been setup properly");
 			}
 		}
-
-		private bool IsImageFromPicasa(Android.Net.Uri imageUri)
-		{
-			// This is quite stupid, I know.
-			return imageUri.ToString().Contains("//com.google.android.gallery3d.provider/picasa/item/");
-		}
 	}
 
 
