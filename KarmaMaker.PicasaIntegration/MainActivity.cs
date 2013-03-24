@@ -49,40 +49,16 @@ namespace KarmaMaker.PicasaIntegration
 				Android.Net.Uri selectedImgUri = data.Data;
 				Log.AddMsg("SelectedImageUri == {0}", selectedImgUri);
 
-				if(IsImageFromPicasa(selectedImgUri))
+				using(var inputStream = ContentResolver.OpenInputStream(selectedImgUri))
 				{
-					Log.AddMsg("Load from Picasa");
-
-					using(var inputStream = ContentResolver.OpenInputStream(selectedImgUri))
-					{
-						MainView.SetImageBitmap(BitmapFactory.DecodeStream(inputStream));
-					} 
+					MainView.SetImageBitmap(BitmapFactory.DecodeStream(inputStream));
 				}
-				else
-				{
-					Log.AddMsg("Load from local storage");
 
-					string[] filePathColumn = { MediaStore.MediaColumns.Data };
-					var cursor = ContentResolver.Query (selectedImgUri, filePathColumn, null, null, null);
-					if (cursor == null) Log.AddMsg ("Panic: cursor is null");
-
-					cursor.MoveToFirst();
-					int columnIndex = cursor.GetColumnIndex(MediaStore.MediaColumns.Data);
-					if (columnIndex != 0) Log.AddMsg ("ColumnIndex == {0}", columnIndex);
-
-					string picturePath = cursor.GetString(columnIndex);
-					cursor.Close();
-					Log.AddMsg("PicturePath == {0}", picturePath);
-
-					MainView.SetImageBitmap(BitmapFactory.DecodeFile(picturePath));
-				}
 				Log.AddMsg("Memory usage: {0}MB from {1}MB", Runtime.GetRuntime().TotalMemory() / (1024 * 1024), Runtime.GetRuntime().MaxMemory() / (1024 * 1024));
-			
 			}
 			else
 			{
 				Log.AddMsg("RequestCode == {0} | ResultCode == {1} | Data == {2}", requestCode, resultCode, data);
-
 			}
 		}
 
