@@ -7,6 +7,7 @@ using Java.IO;
 using Java.Lang;
 using Android.Graphics;
 using Android.OS;
+using System.IO;
 
 namespace KarmaMaker.PicasaIntegration
 {
@@ -46,43 +47,40 @@ namespace KarmaMaker.PicasaIntegration
 
 			if(requestCode == PickImageRequestCode && resultCode == Result.Ok && data != null)
 			{
-				Android.Net.Uri selectedImgUri = data.Data;
-				Log.AddMsg("SelectedImageUri == {0}", selectedImgUri);
+				Android.Net.Uri imageUri = data.Data;
+				Log.AddMsg("SelectedImageUri == {0}", imageUri);
 
-				if(IsImageFromPicasa(selectedImgUri))
-				{
-					Log.AddMsg("Load from Picasa");
+				string[] filePathColumn = { MediaStore.MediaColumns.Data };
+				var cursor = ContentResolver.Query (imageUri, filePathColumn, null, null, null);
+				if (cursor == null) Log.AddMsg ("Panic: cursor is null");
 
-					using(var inputStream = ContentResolver.OpenInputStream(selectedImgUri))
-					{
-						MainView.SetImageBitmap(BitmapFactory.DecodeStream(inputStream));
-					} 
+				cursor.MoveToFirst();
+				int columnIndex = cursor.GetColumnIndex(MediaStore.MediaColumns.Data);
+				if (columnIndex != -1)
+				{ 
+					Log.AddMsg ("Load from file");
+					var fileName = cursor.GetString(columnIndex);
+					MainView.SetImageBitmap(BitmapFactory.DecodeFile(fileName));
 				}
 				else
 				{
-					Log.AddMsg("Load from local storage");
-
-					string[] filePathColumn = { MediaStore.MediaColumns.Data };
-					var cursor = ContentResolver.Query (selectedImgUri, filePathColumn, null, null, null);
-					if (cursor == null) Log.AddMsg ("Panic: cursor is null");
-
-					cursor.MoveToFirst();
-					int columnIndex = cursor.GetColumnIndex(MediaStore.MediaColumns.Data);
-					if (columnIndex != 0) Log.AddMsg ("ColumnIndex == {0}", columnIndex);
-
+					columnIndex = cursor.GetColumnIndex(MediaStore.MediaColumns.DisplayName);
+					if (columnIndex != -1) 
+					{
+						Log.AddMsg ("Load from stream");
+						Stream inputStream = ContentResolver.OpenInputStream(imageUri); 
+						MainView.SetImageBitmap(BitmapFactory.DecodeStream(inputStream));
+						inputStream.Close();
+					}
 					string picturePath = cursor.GetString(columnIndex);
-					cursor.Close();
-					Log.AddMsg("PicturePath == {0}", picturePath);
-
-					MainView.SetImageBitmap(BitmapFactory.DecodeFile(picturePath));
 				}
+				cursor.Close();
+
 				Log.AddMsg("Memory usage: {0}MB from {1}MB", Runtime.GetRuntime().TotalMemory() / (1024 * 1024), Runtime.GetRuntime().MaxMemory() / (1024 * 1024));
-			
 			}
 			else
 			{
 				Log.AddMsg("RequestCode == {0} | ResultCode == {1} | Data == {2}", requestCode, resultCode, data);
-
 			}
 		}
 
