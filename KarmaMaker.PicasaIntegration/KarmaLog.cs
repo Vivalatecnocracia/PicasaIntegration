@@ -22,7 +22,7 @@ namespace KarmaMaker.PicasaIntegration
 		public void AddMsg(string msg, params object[] args)
 		{
 			msg = string.Format(msg, args);
-			LogCache.Append(msg); // Yeap, it can be huge
+			LogCache.AppendLine(msg); // Yeap, it can be huge
 			Context.RunOnUiThread(() => Toast.MakeText(Context, msg, ToastLength.Short).Show());
 			Log.Info(Tag, msg);
 		}
