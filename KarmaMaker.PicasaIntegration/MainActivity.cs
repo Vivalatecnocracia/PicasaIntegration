@@ -7,6 +7,7 @@ using Java.IO;
 using Java.Lang;
 using Android.Graphics;
 using Android.OS;
+using System.Threading.Tasks;
 
 namespace KarmaMaker.PicasaIntegration
 {
@@ -50,7 +51,10 @@ namespace KarmaMaker.PicasaIntegration
 				Android.Net.Uri selectedImgUri = data.Data;
 				Log.AddMsg("SelectedImageUri == {0}", selectedImgUri);
 
-				MainView.SetImageBitmap(BitmapFactory.DecodeFile(GetFilePath(selectedImgUri)));
+				var getFilePathTask = new Task<string>(() => GetFilePath(selectedImgUri));
+				getFilePathTask.ContinueWith((Task<string> getFilePath) => RunOnUiThread(() => MainView.SetImageBitmap(BitmapFactory.DecodeFile(getFilePath.Result))));
+
+				getFilePathTask.Start();
 
 				Log.AddMsg("Memory usage: {0}MB from {1}MB", Runtime.GetRuntime().TotalMemory() / (1024 * 1024), Runtime.GetRuntime().MaxMemory() / (1024 * 1024));
 			}
@@ -59,17 +63,52 @@ namespace KarmaMaker.PicasaIntegration
 				Log.AddMsg("RequestCode == {0} | ResultCode == {1} | Data == {2}", requestCode, resultCode, data);
 			}
 		}
-		
-		private string GetFilePath(Android.Net.Uri selectedImgUri)
-		{
-			var FilePath = CacheDir + "/" + BufferFilePath;
-			var iStream = ContentResolver.OpenInputStream(selectedImgUri);
-			var tempFileOStream = System.IO.File.OpenWrite(FilePath);
 
-			iStream.CopyTo(tempFileOStream);
+		private string GetFilePath(Android.Net.Uri imgUri)
+		{
+			// If image is from Picasa
+			if(imgUri.ToString().Contains("//com.google.android.gallery3d.provider/picasa/item/"))
+			{
+				return GetPicasaFilePath(imgUri);
+			}
+			else
+			{
+				return GetUsualFilePath(imgUri);
+			}
+		}
+
+		private string GetUsualFilePath(Android.Net.Uri imgUri)
+		{
+			Log.AddMsg("Load from local storage");
+			
+			string[] filePathColumn = { MediaStore.MediaColumns.Data };
+			var cursor = ContentResolver.Query (imgUri, filePathColumn, null, null, null);
+			if (cursor == null) Log.AddMsg ("Panic: cursor is null");
+			
+			cursor.MoveToFirst();
+			int columnIndex = cursor.GetColumnIndex(MediaStore.MediaColumns.Data);
+			if (columnIndex != 0) Log.AddMsg ("ColumnIndex == {0}", columnIndex);
+			
+			string picturePath = cursor.GetString(columnIndex);
+			cursor.Close();
+			Log.AddMsg("PicturePath == {0}", picturePath);
+
+			return picturePath;
+		}
+
+		private string GetPicasaFilePath(Android.Net.Uri imgUri)
+		{
+			Log.AddMsg("Load from picasa");
+
+			var picturePath = CacheDir + "/" + BufferFilePath;
+			var imgIStream = ContentResolver.OpenInputStream(imgUri);
+			var tempFileOStream = System.IO.File.OpenWrite(picturePath);
+			
+			imgIStream.CopyTo(tempFileOStream);
+
 			tempFileOStream.Close();
-			iStream.Close();
-			return FilePath;
+			imgIStream.Close();
+			return picturePath;
 		}
 
 		private void OnSendLogViaEmail ()
