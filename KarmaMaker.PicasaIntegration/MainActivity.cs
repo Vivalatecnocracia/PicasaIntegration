@@ -14,6 +14,7 @@ namespace KarmaMaker.PicasaIntegration
 	public class MainActivity : Activity
 	{
 		private const int PickImageRequestCode = 0x0100;
+		private const string BufferFilePath = "ImageBuffer.jpg";
 
 		private MainView MainView { get; set; }
 		private KarmaLog Log { get; set; }
@@ -49,10 +50,7 @@ namespace KarmaMaker.PicasaIntegration
 				Android.Net.Uri selectedImgUri = data.Data;
 				Log.AddMsg("SelectedImageUri == {0}", selectedImgUri);
 
-				using(var inputStream = ContentResolver.OpenInputStream(selectedImgUri))
-				{
-					MainView.SetImageBitmap(BitmapFactory.DecodeStream(inputStream));
-				}
+				MainView.SetImageBitmap(BitmapFactory.DecodeFile(GetFilePath(selectedImgUri)));
 
 				Log.AddMsg("Memory usage: {0}MB from {1}MB", Runtime.GetRuntime().TotalMemory() / (1024 * 1024), Runtime.GetRuntime().MaxMemory() / (1024 * 1024));
 			}
@@ -60,6 +58,18 @@ namespace KarmaMaker.PicasaIntegration
 			{
 				Log.AddMsg("RequestCode == {0} | ResultCode == {1} | Data == {2}", requestCode, resultCode, data);
 			}
+		}
+		
+		private string GetFilePath(Android.Net.Uri selectedImgUri)
+		{
+			var FilePath = CacheDir + "/" + BufferFilePath;
+			var iStream = ContentResolver.OpenInputStream(selectedImgUri);
+			var tempFileOStream = System.IO.File.OpenWrite(FilePath);
+
+			iStream.CopyTo(tempFileOStream);
+			tempFileOStream.Close();
+			iStream.Close();
+			return FilePath;
 		}
 
 		private void OnSendLogViaEmail ()
